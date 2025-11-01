@@ -112,3 +112,9 @@ impl fmt::Display for ValidationError {
 }
 
 impl std::error::Error for ValidationError {}
+
+impl From<ValidationError> for ConfigError {
+    fn from(err: ValidationError) -> Self {
+        ConfigError::ValidationError(err.to_string())
+    }
+}

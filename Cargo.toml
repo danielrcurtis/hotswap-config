@@ -3,10 +3,10 @@ name = "hotswap-config"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87.0"
-authors = ["Daniel Curtis <daniel@tmsystems.ai>"]
+authors = ["Daniel Curtis <drc@danielryancurtis.com>"]
 description = "Zero-downtime configuration management with lock-free hot-reloads and atomic updates"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/hotswap-config"
+repository = "https://github.com/danielrcurtis/hotswap-config"
 documentation = "https://docs.rs/hotswap-config"
 keywords = ["config", "configuration", "hot-reload", "lock-free", "zero-downtime"]
 categories = ["config", "development-tools"]
@@ -51,7 +51,7 @@ arc-swap = "1.7"
 thiserror = "2.0"
 
 # Config loading (using config-rs crate)
-config = { version = "0.14", default-features = false }
+config = { version = "0.14", default-features = false, features = ["yaml", "toml", "json"] }
 
 # Optional: File watching
 notify = { version = "7.0", optional = true, default-features = false, features = ["macos_kqueue"] }

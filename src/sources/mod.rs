@@ -1,6 +1,9 @@
 //! Configuration source implementations.
 
-// TODO: Implement configuration sources
-// - File source (YAML, TOML, JSON)
-// - Environment variable source
-// - Remote sources (HTTP, etcd, Consul)
+mod config_source;
+mod env;
+mod file;
+
+pub use config_source::ConfigSource;
+pub use env::EnvSource;
+pub use file::FileSource;

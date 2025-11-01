@@ -275,4 +275,4 @@ at your option.
 
 **Status**: 🚧 Early development (v0.1) - API may change
 
-Built with ❤️ by [Daniel Curtis](https://github.com/yourusername)
+Built with ❤️ by [Daniel Curtis](https://github.com/danielrcurtis)
