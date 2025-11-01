@@ -10,8 +10,14 @@ use std::sync::Arc;
 #[cfg(feature = "validation")]
 use crate::core::Validate;
 
+#[cfg(feature = "file-watch")]
+use crate::notify::ConfigWatcher;
+#[cfg(feature = "file-watch")]
+use std::time::Duration;
+
 /// Type alias for any-based validator functions used during building.
-type AnyValidator = Arc<dyn Fn(&dyn std::any::Any) -> std::result::Result<(), ValidationError> + Send + Sync>;
+type AnyValidator =
+    Arc<dyn Fn(&dyn std::any::Any) -> std::result::Result<(), ValidationError> + Send + Sync>;
 
 /// Type alias for typed validator functions.
 type TypedValidator<T> = Arc<dyn Fn(&T) -> std::result::Result<(), ValidationError> + Send + Sync>;
@@ -47,6 +53,10 @@ pub struct HotswapConfigBuilder {
     env_separator: Option<String>,
     custom_sources: Vec<Box<dyn ConfigSource>>,
     validator: Option<AnyValidator>,
+    #[cfg(feature = "file-watch")]
+    enable_file_watch: bool,
+    #[cfg(feature = "file-watch")]
+    watch_debounce: Duration,
 }
 
 impl HotswapConfigBuilder {
@@ -58,6 +68,10 @@ impl HotswapConfigBuilder {
             env_separator: None,
             custom_sources: Vec::new(),
             validator: None,
+            #[cfg(feature = "file-watch")]
+            enable_file_watch: false,
+            #[cfg(feature = "file-watch")]
+            watch_debounce: Duration::from_millis(500),
         }
     }
 
@@ -140,6 +154,7 @@ impl HotswapConfigBuilder {
     ///
     /// ```rust,no_run
     /// use hotswap_config::prelude::*;
+    /// use hotswap_config::error::ValidationError;
     /// use serde::Deserialize;
     ///
     /// #[derive(Debug, Deserialize, Clone)]
@@ -175,6 +190,52 @@ impl HotswapConfigBuilder {
                 .ok_or_else(|| ValidationError::custom("Type mismatch in validator"))?;
             validator(typed_config)
         }));
+        self
+    }
+
+    /// Enable file watching for automatic reloads.
+    ///
+    /// When enabled, the configuration will automatically reload when any
+    /// watched file changes. Uses a default debounce of 500ms.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hotswap_config::prelude::*;
+    ///
+    /// # async fn example() {
+    /// HotswapConfig::builder()
+    ///     .with_file("config.yaml")
+    ///     .with_file_watch(true);
+    /// # }
+    /// ```
+    #[cfg(feature = "file-watch")]
+    pub fn with_file_watch(mut self, enabled: bool) -> Self {
+        self.enable_file_watch = enabled;
+        self
+    }
+
+    /// Set the debounce duration for file watching.
+    ///
+    /// This is the minimum time between reload triggers when files change rapidly.
+    /// Default is 500ms.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hotswap_config::prelude::*;
+    /// use std::time::Duration;
+    ///
+    /// # async fn example() {
+    /// HotswapConfig::builder()
+    ///     .with_file("config.yaml")
+    ///     .with_file_watch(true)
+    ///     .with_watch_debounce(Duration::from_secs(1));
+    /// # }
+    /// ```
+    #[cfg(feature = "file-watch")]
+    pub fn with_watch_debounce(mut self, duration: Duration) -> Self {
+        self.watch_debounce = duration;
         self
     }
 
@@ -220,12 +281,10 @@ impl HotswapConfigBuilder {
         let config: T = loader.load()?;
 
         // Convert the Any-based validator to a typed validator
-        let typed_validator: Option<TypedValidator<T>> =
-            self.validator.as_ref().map(|v| {
-                let validator = Arc::clone(v);
-                Arc::new(move |config: &T| validator(config as &dyn std::any::Any))
-                    as TypedValidator<T>
-            });
+        let typed_validator: Option<TypedValidator<T>> = self.validator.as_ref().map(|v| {
+            let validator = Arc::clone(v);
+            Arc::new(move |config: &T| validator(config as &dyn std::any::Any)) as TypedValidator<T>
+        });
 
         // Validate if a validator was provided
         if let Some(validator) = &typed_validator {
@@ -241,7 +300,37 @@ impl HotswapConfigBuilder {
         }
 
         // Create the config handle with loader and validator
-        Ok(HotswapConfig::with_loader(config, loader, typed_validator))
+        #[cfg(feature = "file-watch")]
+        let mut hotswap_config = HotswapConfig::with_loader(config, loader, typed_validator);
+        #[cfg(not(feature = "file-watch"))]
+        let hotswap_config = HotswapConfig::with_loader(config, loader, typed_validator);
+
+        // Set up file watching if enabled
+        #[cfg(feature = "file-watch")]
+        if self.enable_file_watch {
+            let (watcher, mut rx) = ConfigWatcher::new(self.watch_debounce)
+                .map_err(|e| ConfigError::Other(format!("Failed to create file watcher: {}", e)))?;
+
+            // Watch all file paths
+            for path in &self.file_paths {
+                watcher.watch(path).await?;
+            }
+
+            let watcher_arc = Arc::new(watcher);
+            hotswap_config = hotswap_config.with_watcher(Arc::clone(&watcher_arc));
+
+            // Spawn a task to handle reload signals
+            let config_clone = hotswap_config.clone();
+            tokio::spawn(async move {
+                while let Some(()) = rx.recv().await {
+                    if let Err(e) = config_clone.reload().await {
+                        eprintln!("Auto-reload failed: {}", e);
+                    }
+                }
+            });
+        }
+
+        Ok(hotswap_config)
     }
 }
 

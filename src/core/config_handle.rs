@@ -6,6 +6,9 @@ use arc_swap::ArcSwap;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
 
+#[cfg(feature = "file-watch")]
+use crate::notify::{ConfigWatcher, SubscriberRegistry};
+
 /// Type alias for validator functions.
 type Validator<T> = Arc<dyn Fn(&T) -> std::result::Result<(), ValidationError> + Send + Sync>;
 
@@ -44,16 +47,37 @@ pub struct HotswapConfig<T> {
     loader: Option<Arc<ConfigLoader>>,
     /// Optional validator function
     validator: Option<Validator<T>>,
+    /// Optional file watcher for auto-reload
+    #[cfg(feature = "file-watch")]
+    watcher: Option<Arc<ConfigWatcher>>,
+    /// Subscriber registry for change notifications
+    #[cfg(feature = "file-watch")]
+    subscribers: Arc<SubscriberRegistry>,
 }
 
 impl<T> HotswapConfig<T> {
     /// Create a new configuration handle with an initial value.
-    #[allow(dead_code)]
-    pub(crate) fn new(initial: T) -> Self {
+    ///
+    /// This creates a basic configuration handle without any loading or validation.
+    /// For most use cases, prefer using `HotswapConfig::builder()` instead.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use hotswap_config::prelude::*;
+    ///
+    /// let config = HotswapConfig::new(42);
+    /// assert_eq!(*config.get(), 42);
+    /// ```
+    pub fn new(initial: T) -> Self {
         Self {
             current: Arc::new(ArcSwap::new(Arc::new(initial))),
             loader: None,
             validator: None,
+            #[cfg(feature = "file-watch")]
+            watcher: None,
+            #[cfg(feature = "file-watch")]
+            subscribers: Arc::new(SubscriberRegistry::new()),
         }
     }
 
@@ -67,7 +91,18 @@ impl<T> HotswapConfig<T> {
             current: Arc::new(ArcSwap::new(Arc::new(initial))),
             loader: Some(Arc::new(loader)),
             validator,
+            #[cfg(feature = "file-watch")]
+            watcher: None,
+            #[cfg(feature = "file-watch")]
+            subscribers: Arc::new(SubscriberRegistry::new()),
         }
+    }
+
+    /// Set the file watcher for this configuration.
+    #[cfg(feature = "file-watch")]
+    pub(crate) fn with_watcher(mut self, watcher: Arc<ConfigWatcher>) -> Self {
+        self.watcher = Some(watcher);
+        self
     }
 
     /// Get a reference-counted handle to the current configuration.
@@ -144,6 +179,10 @@ impl<T> HotswapConfig<T> {
         // Atomically swap to the new configuration
         self.current.store(Arc::new(new_config));
 
+        // Notify subscribers
+        #[cfg(feature = "file-watch")]
+        self.subscribers.notify_all().await;
+
         Ok(())
     }
 
@@ -178,7 +217,73 @@ impl<T> HotswapConfig<T> {
         // Atomically swap to the new configuration
         self.current.store(Arc::new(new_config));
 
+        // Notify subscribers
+        #[cfg(feature = "file-watch")]
+        self.subscribers.notify_all().await;
+
         Ok(())
+    }
+
+    /// Subscribe to configuration changes.
+    ///
+    /// The provided callback will be invoked whenever the configuration
+    /// is reloaded or updated. Returns a handle that can be dropped to unsubscribe.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use hotswap_config::prelude::*;
+    /// # use serde::Deserialize;
+    /// # #[derive(Debug, Deserialize, Clone)]
+    /// # struct AppConfig { port: u16 }
+    /// # async fn example(config: HotswapConfig<AppConfig>) {
+    /// let handle = config.subscribe(|| {
+    ///     println!("Configuration changed!");
+    /// }).await;
+    ///
+    /// // Later, unsubscribe
+    /// drop(handle);
+    /// # }
+    /// ```
+    #[cfg(feature = "file-watch")]
+    pub async fn subscribe<F>(&self, callback: F) -> crate::notify::SubscriptionHandle
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.subscribers.subscribe(callback).await
+    }
+
+    /// Start watching configuration files for changes.
+    ///
+    /// When enabled, the configuration will automatically reload when any
+    /// watched file changes. This requires a file watcher to be set up
+    /// via the builder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no file watcher is configured.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use hotswap_config::prelude::*;
+    /// # use serde::Deserialize;
+    /// # #[derive(Debug, Deserialize, Clone)]
+    /// # struct AppConfig { port: u16 }
+    /// # async fn example() -> Result<()> {
+    /// let config = HotswapConfig::builder()
+    ///     .with_file("config.yaml")
+    ///     .with_file_watch(true)
+    ///     .build::<AppConfig>()
+    ///     .await?;
+    ///
+    /// // File watching is now active
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "file-watch")]
+    pub fn is_watching(&self) -> bool {
+        self.watcher.is_some()
     }
 }
 
@@ -188,6 +293,10 @@ impl<T> Clone for HotswapConfig<T> {
             current: Arc::clone(&self.current),
             loader: self.loader.clone(),
             validator: self.validator.clone(),
+            #[cfg(feature = "file-watch")]
+            watcher: self.watcher.clone(),
+            #[cfg(feature = "file-watch")]
+            subscribers: Arc::clone(&self.subscribers),
         }
     }
 }

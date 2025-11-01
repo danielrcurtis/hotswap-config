@@ -32,7 +32,7 @@
 //!     url: String,
 //! }
 //!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # async fn example() -> hotswap_config::error::Result<()> {
 //! // Load configuration with standard precedence
 //! let config = HotswapConfig::builder()
 //!     .with_file("config/default.yaml")

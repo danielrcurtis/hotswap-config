@@ -1,8 +1,9 @@
 //! Configuration change notification system.
 //!
-//! Provides subscriber-based notifications when configuration is reloaded.
+//! Provides file watching and subscriber-based notifications when configuration is reloaded.
 
-// TODO: Implement notification system
-// - Subscriber trait
-// - Subscriber registry
-// - Async notification channels
+pub mod subscriber;
+pub mod watcher;
+
+pub use subscriber::{SubscriberRegistry, SubscriptionHandle};
+pub use watcher::ConfigWatcher;

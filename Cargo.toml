@@ -25,11 +25,11 @@ toml = ["dep:toml"]
 json = ["serde_json"]
 all-formats = ["yaml", "toml", "json"]
 
-# Advanced features
-partial-updates = ["json-patch"]
-rollback = ["chrono"]
-gradual-rollout = ["fastrand"]
-remote = ["reqwest", "async-trait"]
+# Advanced features (most require tokio runtime)
+partial-updates = ["json-patch", "serde_json", "tokio-runtime"]
+rollback = ["chrono", "tokio-runtime"]
+gradual-rollout = ["fastrand", "tokio-runtime"]
+remote = ["reqwest", "async-trait", "tokio-runtime"]
 
 # Secret management integrations
 secrets-vault = ["vaultrs"]
@@ -63,6 +63,7 @@ serde_json = { version = "1.0", optional = true }
 
 # Optional: Partial updates
 json-patch = { version = "3.0", optional = true }
+# Note: partial-updates requires serde_json (pulled in by json-patch)
 
 # Optional: Rollback
 chrono = { version = "0.4", optional = true, features = ["serde"] }
