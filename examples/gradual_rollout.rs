@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
     stable_count = 0;
     canary_count = 0;
 
-    for i in 1..=20 {
+    for _ in 1..=20 {
         let cfg = rollout.get(None).await;
         if cfg.version == "v1.0" {
             stable_count += 1;
@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
     stable_count = 0;
     canary_count = 0;
 
-    for i in 1..=20 {
+    for _ in 1..=20 {
         let cfg = rollout.get(None).await;
         if cfg.version == "v1.0" {
             stable_count += 1;

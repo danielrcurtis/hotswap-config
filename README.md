@@ -191,6 +191,9 @@ cargo test --no-default-features
 ### Running Examples
 
 ```bash
+# Service configuration (comprehensive example with validation)
+cargo run --example service_config --features yaml
+
 # Hot reload demonstration
 cargo run --example hot_reload --features yaml
 

@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     println!("-------------------------------------------");
 
     // NOTE: This is a mock endpoint. In a real application, replace with your config server URL.
-    let http_source = HttpSource::builder()
+    let _http_source = HttpSource::builder()
         .with_url("https://config.example.com/api/config")
         .with_auth_token("your-secret-token")
         .with_timeout(Duration::from_secs(10))

@@ -419,6 +419,6 @@ mod tests {
 
         // Should be roughly 50/50 (allow 40-60% range due to randomness)
         let canary_percentage = (canary_count * 100) / iterations;
-        assert!(canary_percentage >= 40 && canary_percentage <= 60);
+        assert!((40..=60).contains(&canary_percentage));
     }
 }

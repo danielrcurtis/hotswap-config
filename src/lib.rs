@@ -89,7 +89,7 @@ pub mod metrics;
 /// Convenient re-exports for common usage patterns.
 pub mod prelude {
     pub use crate::core::{HotswapConfig, HotswapConfigBuilder};
-    pub use crate::error::{ConfigError, Result};
+    pub use crate::error::{ConfigError, Result, ValidationError};
 
     #[cfg(feature = "validation")]
     pub use crate::core::Validate;
