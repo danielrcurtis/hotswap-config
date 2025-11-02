@@ -5,8 +5,8 @@ This document describes the benchmarking methodology for hotswap-config performa
 ## Test System
 
 - **CPU:** Apple M3 Pro (12-core: 6 performance + 6 efficiency)
-- **RAM:** 36 GB unified memory
-- **OS:** macOS 15.0.0 (Darwin 25.0.0)
+- **RAM:** 18 GB unified memory
+- **OS:** macOS 26.0.1 (Darwin 26.0.0)
 - **Rust:** 1.87.0 (stable)
 - **Architecture:** aarch64-apple-darwin
 

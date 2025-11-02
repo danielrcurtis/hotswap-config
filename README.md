@@ -24,7 +24,7 @@ A high-performance, hot-reloadable configuration store with **wait-free reads** 
 
 ## Performance (Benchmarked)
 
-**Test System:** Apple MacBook Pro (M3 Pro, 12-core), macOS 15.0.0, Rust 1.87.0
+**Test System:** Apple MacBook Pro (M3 Pro, 12-core, 18GB unified memory), macOS 26.0.1, Rust 1.87.0
 **Build:** `cargo bench --release` (LTO=true, opt-level=3, codegen-units=1)
 **Methodology:** Criterion 0.5, 100 samples, warm L3 cache
 
