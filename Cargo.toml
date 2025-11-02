@@ -29,7 +29,7 @@ all-formats = ["yaml", "toml", "json"]
 partial-updates = ["json-patch", "serde_json", "tokio-runtime"]
 rollback = ["chrono", "tokio-runtime"]
 gradual-rollout = ["fastrand", "tokio-runtime"]
-remote = ["reqwest", "async-trait", "tokio-runtime"]
+remote = ["reqwest", "async-trait", "tokio-runtime", "serde_json"]
 
 # Secret management integrations
 secrets-vault = ["vaultrs"]
@@ -37,7 +37,7 @@ secrets-aws = ["aws-sdk-secretsmanager"]
 secrets-gcp = ["google-secretmanager1"]
 
 # Observability
-metrics = ["opentelemetry"]
+metrics = ["opentelemetry", "parking_lot"]
 tracing = ["dep:tracing"]
 
 # Async runtime support
@@ -82,10 +82,11 @@ google-secretmanager1 = { version = "6.0", optional = true }
 
 # Optional: Observability
 opentelemetry = { version = "0.30", optional = true, features = ["metrics"] }
+parking_lot = { version = "0.12", optional = true }
 tracing = { version = "0.1", optional = true }
 
 # Optional: Async runtimes
-tokio = { version = "1.45", optional = true, features = ["sync", "time", "rt"] }
+tokio = { version = "1.45", optional = true, features = ["sync", "time", "rt", "rt-multi-thread"] }
 async-std = { version = "1.13", optional = true }
 
 [dev-dependencies]
@@ -95,10 +96,9 @@ tempfile = "3.14"
 criterion = "0.5"
 proptest = "1.6"
 
-# Benchmarks will be added later
-# [[bench]]
-# name = "read_performance"
-# harness = false
+[[bench]]
+name = "read_performance"
+harness = false
 
 [profile.release]
 lto = true

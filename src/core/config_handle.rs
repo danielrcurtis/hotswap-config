@@ -9,6 +9,9 @@ use std::sync::Arc;
 #[cfg(feature = "file-watch")]
 use crate::notify::{ConfigWatcher, SubscriberRegistry};
 
+#[cfg(feature = "metrics")]
+use crate::metrics::ConfigMetrics;
+
 /// Type alias for validator functions.
 type Validator<T> = Arc<dyn Fn(&T) -> std::result::Result<(), ValidationError> + Send + Sync>;
 
@@ -53,6 +56,9 @@ pub struct HotswapConfig<T> {
     /// Subscriber registry for change notifications
     #[cfg(feature = "file-watch")]
     subscribers: Arc<SubscriberRegistry>,
+    /// Optional metrics collector
+    #[cfg(feature = "metrics")]
+    metrics: Option<Arc<ConfigMetrics>>,
 }
 
 impl<T> HotswapConfig<T> {
@@ -78,6 +84,8 @@ impl<T> HotswapConfig<T> {
             watcher: None,
             #[cfg(feature = "file-watch")]
             subscribers: Arc::new(SubscriberRegistry::new()),
+            #[cfg(feature = "metrics")]
+            metrics: None,
         }
     }
 
@@ -86,7 +94,11 @@ impl<T> HotswapConfig<T> {
         initial: T,
         loader: ConfigLoader,
         validator: Option<Validator<T>>,
+        #[cfg(feature = "metrics")] meter: Option<opentelemetry::metrics::Meter>,
     ) -> Self {
+        #[cfg(feature = "metrics")]
+        let metrics = meter.map(|m| Arc::new(ConfigMetrics::new(m)));
+
         Self {
             current: Arc::new(ArcSwap::new(Arc::new(initial))),
             loader: Some(Arc::new(loader)),
@@ -95,6 +107,8 @@ impl<T> HotswapConfig<T> {
             watcher: None,
             #[cfg(feature = "file-watch")]
             subscribers: Arc::new(SubscriberRegistry::new()),
+            #[cfg(feature = "metrics")]
+            metrics,
         }
     }
 
@@ -163,6 +177,28 @@ impl<T> HotswapConfig<T> {
     where
         T: DeserializeOwned + Clone,
     {
+        #[cfg(feature = "metrics")]
+        let timer = self.metrics.as_ref().map(|m| m.start_reload());
+
+        let result = self.reload_inner().await;
+
+        #[cfg(feature = "metrics")]
+        if let Some(metrics) = &self.metrics {
+            if let Some(start) = timer {
+                match &result {
+                    Ok(_) => metrics.record_reload_success(start),
+                    Err(_) => metrics.record_reload_failure(start),
+                }
+            }
+        }
+
+        result
+    }
+
+    async fn reload_inner(&self) -> Result<()>
+    where
+        T: DeserializeOwned + Clone,
+    {
         let loader = self
             .loader
             .as_ref()
@@ -173,7 +209,14 @@ impl<T> HotswapConfig<T> {
 
         // Validate if a validator was provided
         if let Some(validator) = &self.validator {
-            validator(&new_config).map_err(|e| ConfigError::ValidationError(e.to_string()))?;
+            let validation_result = validator(&new_config);
+            if validation_result.is_err() {
+                #[cfg(feature = "metrics")]
+                if let Some(metrics) = &self.metrics {
+                    metrics.record_validation_failure();
+                }
+                return validation_result.map_err(|e| ConfigError::ValidationError(e.to_string()));
+            }
         }
 
         // Atomically swap to the new configuration
@@ -211,11 +254,24 @@ impl<T> HotswapConfig<T> {
     pub async fn update(&self, new_config: T) -> Result<()> {
         // Validate if a validator was provided
         if let Some(validator) = &self.validator {
-            validator(&new_config).map_err(|e| ConfigError::ValidationError(e.to_string()))?;
+            let validation_result = validator(&new_config);
+            if validation_result.is_err() {
+                #[cfg(feature = "metrics")]
+                if let Some(metrics) = &self.metrics {
+                    metrics.record_validation_failure();
+                }
+                return validation_result.map_err(|e| ConfigError::ValidationError(e.to_string()));
+            }
         }
 
         // Atomically swap to the new configuration
         self.current.store(Arc::new(new_config));
+
+        // Record the update in metrics
+        #[cfg(feature = "metrics")]
+        if let Some(metrics) = &self.metrics {
+            metrics.record_update();
+        }
 
         // Notify subscribers
         #[cfg(feature = "file-watch")]
@@ -250,7 +306,16 @@ impl<T> HotswapConfig<T> {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.subscribers.subscribe(callback).await
+        let handle = self.subscribers.subscribe(callback).await;
+
+        // Update subscriber count metric
+        #[cfg(feature = "metrics")]
+        if let Some(metrics) = &self.metrics {
+            let count = self.subscribers.subscriber_count().await as i64;
+            metrics.update_subscriber_count(count);
+        }
+
+        handle
     }
 
     /// Start watching configuration files for changes.
@@ -297,6 +362,8 @@ impl<T> Clone for HotswapConfig<T> {
             watcher: self.watcher.clone(),
             #[cfg(feature = "file-watch")]
             subscribers: Arc::clone(&self.subscribers),
+            #[cfg(feature = "metrics")]
+            metrics: self.metrics.clone(),
         }
     }
 }

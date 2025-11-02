@@ -7,6 +7,9 @@ use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(feature = "metrics")]
+use opentelemetry::metrics::Meter;
+
 #[cfg(feature = "validation")]
 use crate::core::Validate;
 
@@ -57,6 +60,8 @@ pub struct HotswapConfigBuilder {
     enable_file_watch: bool,
     #[cfg(feature = "file-watch")]
     watch_debounce: Duration,
+    #[cfg(feature = "metrics")]
+    meter: Option<Meter>,
 }
 
 impl HotswapConfigBuilder {
@@ -72,6 +77,8 @@ impl HotswapConfigBuilder {
             enable_file_watch: false,
             #[cfg(feature = "file-watch")]
             watch_debounce: Duration::from_millis(500),
+            #[cfg(feature = "metrics")]
+            meter: None,
         }
     }
 
@@ -239,6 +246,31 @@ impl HotswapConfigBuilder {
         self
     }
 
+    /// Enable metrics collection with the provided meter.
+    ///
+    /// When enabled, the configuration will track reload attempts, success/failure
+    /// rates, latencies, and subscriber counts using OpenTelemetry metrics.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use hotswap_config::prelude::*;
+    /// use opentelemetry::global;
+    ///
+    /// # async fn example() {
+    /// let meter = global::meter("my-app");
+    ///
+    /// HotswapConfig::builder()
+    ///     .with_file("config.yaml")
+    ///     .with_metrics(meter);
+    /// # }
+    /// ```
+    #[cfg(feature = "metrics")]
+    pub fn with_metrics(mut self, meter: Meter) -> Self {
+        self.meter = Some(meter);
+        self
+    }
+
     /// Build the configuration handle.
     ///
     /// This performs the initial load from all sources and validates the result.
@@ -299,11 +331,23 @@ impl HotswapConfigBuilder {
                 .map_err(|e| ConfigError::ValidationError(e.to_string()))?;
         }
 
-        // Create the config handle with loader and validator
+        // Create the config handle with loader, validator, and metrics
         #[cfg(feature = "file-watch")]
-        let mut hotswap_config = HotswapConfig::with_loader(config, loader, typed_validator);
+        let mut hotswap_config = HotswapConfig::with_loader(
+            config,
+            loader,
+            typed_validator,
+            #[cfg(feature = "metrics")]
+            self.meter,
+        );
         #[cfg(not(feature = "file-watch"))]
-        let hotswap_config = HotswapConfig::with_loader(config, loader, typed_validator);
+        let hotswap_config = HotswapConfig::with_loader(
+            config,
+            loader,
+            typed_validator,
+            #[cfg(feature = "metrics")]
+            self.meter,
+        );
 
         // Set up file watching if enabled
         #[cfg(feature = "file-watch")]
