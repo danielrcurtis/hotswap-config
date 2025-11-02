@@ -16,7 +16,7 @@ readme = "README.md"
 default = ["file-watch", "validation"]
 
 # Core features
-file-watch = ["notify"]
+file-watch = ["notify", "tokio"]
 validation = []
 
 # File format support
