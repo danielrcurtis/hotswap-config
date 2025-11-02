@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-11-02
+
+### Added
+
+- **Comprehensive Service Configuration Example** (`examples/service_config.rs`)
+  - Production-ready example demonstrating realistic microservice configuration
+  - Nested configuration structure with 8 sections (app, server, database, cache, security, features, observability)
+  - Environment-specific validation rules (e.g., production port restrictions, JWT secret length)
+  - Serde defaults for optional fields
+  - Environment variable override documentation with examples
+  - Serves as canonical reference for developers defining custom config schemas
+
+### Changed
+
+- Export `ValidationError` in prelude for easier access without explicit imports
+- Updated README to list `service_config` example first (most comprehensive)
+- Updated dependencies to latest compatible versions
+
+### Fixed
+
+- All clippy warnings resolved with `-D warnings` flag
+  - Fixed manual range contains in gradual rollout tests
+  - Fixed needless borrows in validation error formatting
+  - Fixed unused variable warnings in examples
+- Applied rustfmt to entire codebase
+
 ## [0.1.0] - 2025-11-01
 
 ### Added
@@ -139,4 +165,5 @@ Complete examples for:
 - Comprehensive benchmark suite
 - All tests pass with every feature combination
 
+[0.1.1]: https://github.com/danielrcurtis/hotswap-config/releases/tag/v0.1.1
 [0.1.0]: https://github.com/danielrcurtis/hotswap-config/releases/tag/v0.1.0
